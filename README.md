@@ -1,0 +1,74 @@
+# GPX Course Splitter
+
+A single-page, no-build web tool that turns a GPX route plus waypoints into Garmin-ready course files.
+
+Dropping waypoints on a map in Gaia GPS or CalTopo is easy. Getting those same waypoints onto a Garmin course is not: Garmin Connect's course editor is clunky, very long routes can choke it, and watches cap the number of course points. This tool does the tedious parts in your browser.
+
+## What it does
+
+- **Snaps waypoints to the track.** Each `<wpt>` is projected onto the nearest point of the route, with a configurable corridor (50 m to "no limit"). Waypoints outside the corridor are left out, and the tool tells you how many.
+- **Types course points.** Water, food, summit and so on are detected from the waypoint name, symbol and description, and you can override any of them or skip them.
+- **Splits long routes.** Add resupply or distance splits and each leg becomes its own course, so you can load a thru-hike a section at a time.
+- **Exports TCX and GPX.** TCX (`TrainingCenterDatabase` v2) is what Garmin Connect imports as a course. Snapped GPX works with Gaia, CalTopo, AllTrails and similar.
+- **Distance markers** every mile, 5 miles, km or 10 km, if you want them.
+- **Works offline** once loaded (service worker), and installs to a phone home screen as a PWA.
+
+Everything runs client-side. No files leave your browser.
+
+## Run it
+
+It is static HTML. Serve the folder with anything:
+
+```bash
+python3 -m http.server 8000
+# open http://localhost:8000
+```
+
+A service worker needs `https://` or `localhost` to register.
+
+## Demo data
+
+`presets/demo.gpx` is a synthetic 44-mile route with nine sample waypoints (one deliberately 420 m off the route, to show the corridor warning). It is not a real trail.
+
+## Add your own presets
+
+1. Put a GPX file in `presets/` (a track with `<ele>`, plus any `<wpt>` elements).
+2. Add a button in `index.html`:
+
+   ```html
+   <button class="trail-btn" data-url="presets/my-route.gpx" data-name="My route">My route<span class="trail-mi">~120 mi</span></button>
+   ```
+
+3. Bump the cache name in `sw.js` if you want installed copies to refresh.
+
+### Optional true-distance extension
+
+If your GPX track was thinned (fewer points, so a shorter measured length), you can store the real along-route distance for each point and the tool will use it instead of re-measuring. Add it per `<trkpt>`:
+
+```xml
+<trkpt lat="39.0" lon="-106.2">
+  <ele>2900</ele>
+  <extensions><tp:dist xmlns:tp="https://example.com/tp">1234.5</tp:dist></extensions>
+</trkpt>
+```
+
+The value is meters from the start of the route. The parser only looks for an element named `dist` inside the point, so the namespace is up to you.
+
+## Files
+
+| File | Purpose |
+|:-|:-|
+| `index.html` | The whole app (HTML, CSS, JS) |
+| `sw.js` | Offline caching |
+| `manifest.json`, `icon.svg` | PWA install metadata |
+| `presets/demo.gpx` | Synthetic sample route |
+
+Map tiles come from OpenStreetMap through Leaflet (loaded from unpkg). Fonts come from Google Fonts.
+
+## Disclaimer
+
+Always carry backup navigation. Check the exported course on your watch before you rely on it.
+
+## License
+
+MIT. See `LICENSE`.

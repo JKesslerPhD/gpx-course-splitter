@@ -1,0 +1,19 @@
+{
+  "name": "Trail GPX Converter",
+  "short_name": "Trail GPX",
+  "description": "Convert GPX waypoints to Garmin-ready course points, snapped to your route",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1a3a2e",
+  "background_color": "#0d1a10",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Trail GPX Converter</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a3a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Trail GPX">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* ─── TOKENS ─── */
+:root {
+  --bg:       #faf8f4;   /* site cream */
+  --card:     #ffffff;
+  --primary:  #2d4a3e;   /* forest */
+  --mid:      #3d6454;   /* forest-mid */
+  --accent:   #4a7a5e;
+  --topo:     #e87d5a;   /* peach */
+  --topo-dk:  #c8603e;   /* peach-dark */
+  --split:    #c9920a;   /* amber */
+  --text:     #1c1c1c;   /* site text */
+  --muted:    #4a4540;   /* text-mid */
+  --border:   #e3d9cc;   /* site border */
+  --row-alt:  #f3ede3;   /* cream-mid */
+  --shadow:   0 1px 6px rgba(45,74,62,0.10);
+}
+/* Light-only */
+:root { color-scheme: light; }
+
+/* ─── RESET ──────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ─── LAYOUT ─────────────────────────────────── */
+.app { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
+
+/* ─── HEADER ─────────────────────────────────── */
+header { padding: 24px 0 20px; }
+.wordmark {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 1.9rem;
+  letter-spacing: 0.05em;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.wordmark svg { flex-shrink: 0; color: var(--accent); }
+@media (max-width: 480px) {
+  .wordmark { font-size: 1.45rem; }
+  .wordmark svg { width: 32px; height: 32px; }
+}
+.tagline { color: var(--muted); font-size: 0.88rem; margin-top: 3px; line-height: 1.4; }
+
+/* ─── INSTALL BANNER ─────────────────────────── */
+.install-banner {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--topo);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.install-banner-text strong { display: block; font-size: 0.88rem; font-weight: 600; }
+.install-banner-text p { font-size: 0.8rem; color: var(--muted); }
+.btn-install {
+  background: var(--topo);
+  color: white;
+  border: none;
+  border-radius: 7px;
+  padding: 8px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ─── STEP CARDS ─────────────────────────────── */
+.step {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 20px 24px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.step-ghost {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 7rem;
+  color: var(--primary);
+  opacity: 0.06;
+  position: absolute;
+  top: -4px; right: 12px;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+}
+.step-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+/* ─── DROP ZONE ──────────────────────────────── */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+  position: relative;
+}
+.drop-zone:hover, .drop-zone.over {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+.drop-zone input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.drop-icon { margin: 0 auto 10px; display: block; width: 44px; height: 44px; color: var(--accent); }
+.drop-zone h2 { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
+.drop-zone p { font-size: 0.83rem; color: var(--muted); }
+.drop-zone.has-file {
+  border-style: solid; border-color: var(--accent);
+  padding: 16px 20px;
+  display: flex; align-items: center; gap: 12px; text-align: left;
+}
+.file-info { flex: 1; }
+.file-name { font-size: 0.9rem; font-weight: 600; }
+.file-sub { font-size: 0.8rem; color: var(--muted); }
+
+/* ─── STATS ──────────────────────────────────── */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+@media (max-width: 420px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+.stat { background: color-mix(in srgb, var(--primary) 8%, var(--card)); border-radius: 8px; padding: 11px 10px; text-align: center; }
+.stat-val { font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; font-weight: 500; color: var(--primary); white-space: nowrap; }
+.stat-lbl { font-size: 0.68rem; color: var(--muted); margin-top: 1px; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* ─── REVERSE BUTTON ─────────────────────────── */
+.reverse-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.btn-reverse {
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
+  border: 1.5px solid var(--border);
+  color: var(--primary);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+}
+.btn-reverse:hover { border-color: var(--primary); }
+
+/* ─── SETTINGS ───────────────────────────────── */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+@media (max-width: 480px) { .settings-grid { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field.full { grid-column: 1 / -1; }
+.field label {
+  font-size: 0.75rem; font-weight: 600; color: var(--muted);
+  font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.07em; text-transform: uppercase;
+}
+.field input, .field select {
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  appearance: none; -webkit-appearance: none;
+  min-height: 44px;
+}
+.field input:focus, .field select:focus { outline: none; border-color: var(--primary); }
+
+/* ─── TRAIL PRE-LOAD ─────────────────────────── */
+.trail-preload { margin-bottom: 18px; }
+.trail-preload-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.trail-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.trail-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  color: var(--primary);
+  transition: border-color 0.15s, background 0.15s;
+  min-width: 66px;
+  flex: 1;
+  max-width: 110px;
+}
+.trail-btn:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--primary) 14%, var(--card));
+}
+.trail-btn.loading {
+  opacity: 0.55;
+  cursor: wait;
+}
+.trail-mi {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-weight: 400;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+.trail-disclaimer {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 10px;
+  line-height: 1.4;
+  font-style: italic;
+}
+.trail-or {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--muted); font-size: 0.8rem;
+  margin-bottom: 14px;
+}
+.trail-or::before, .trail-or::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+/* ─── SPLITS SECTION ─────────────────────────── */
+.splits-section { margin-bottom: 16px; }
+.splits-section .step-label { margin-bottom: 8px; }
+.splits-hint { font-size: 0.82rem; color: var(--muted); margin-bottom: 10px; line-height: 1.4; }
+
+.split-add-row {
+  display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; flex-wrap: wrap;
+}
+.split-add-row .field { flex: 1; min-width: 100px; }
+.split-add-row .field select { flex: 1.2; min-width: 130px; }
+.btn-add-split {
+  background: var(--primary); color: white; border: none; border-radius: 8px;
+  padding: 0 16px; min-height: 44px; font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.btn-add-split:hover { opacity: 0.88; }
+
+.split-list { display: flex; flex-direction: column; gap: 6px; }
+.split-item {
+  display: flex; align-items: center; gap: 10px;
+  background: color-mix(in srgb, var(--split) 10%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--split) 30%, transparent);
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.split-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--split); flex-shrink: 0;
+}
+.split-info { flex: 1; }
+.split-info strong { font-size: 0.88rem; font-weight: 600; }
+.split-info span { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--muted); display: block; }
+.btn-remove-split {
+  background: none; border: none; color: var(--muted); font-size: 1.1rem;
+  cursor: pointer; padding: 4px 6px; border-radius: 4px; line-height: 1; flex-shrink: 0;
+}
+.btn-remove-split:hover { color: var(--topo); background: color-mix(in srgb, var(--topo) 10%, transparent); }
+.no-splits-msg { font-size: 0.82rem; color: var(--muted); font-style: italic; }
+
+/* ─── BUTTONS ────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  border: none; border-radius: 9px;
+  font-family: 'DM Sans', sans-serif; font-weight: 600;
+  cursor: pointer; transition: opacity 0.15s, transform 0.1s;
+  min-height: 48px; padding: 0 20px; font-size: 0.95rem;
+}
+.btn:active { transform: scale(0.97); }
+.btn-process { background: var(--primary); color: white; width: 100%; font-size: 1rem; }
+.btn-process:hover { opacity: 0.9; }
+
+/* ─── ALERT ──────────────────────────────────── */
+.alert {
+  padding: 11px 14px; border-radius: 8px; font-size: 0.85rem;
+  margin-bottom: 14px; line-height: 1.4; display: flex; gap: 8px; align-items: flex-start;
+}
+.alert-warn {
+  background: color-mix(in srgb, var(--topo) 12%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--topo) 30%, transparent);
+  color: var(--topo-dk);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .alert-warn { color: var(--topo); } }
+:root[data-theme="dark"] .alert-warn { color: var(--topo); }
+.alert-long {
+  background: color-mix(in srgb, var(--split) 10%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--split) 35%, transparent);
+  color: var(--text);
+}
+.split-suggest-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.btn-suggest-split {
+  background: var(--split); color: #000; border: none; border-radius: 7px;
+  padding: 7px 12px; font-family: 'DM Sans', sans-serif; font-size: 0.82rem;
+  font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.btn-suggest-split:hover { opacity: 0.85; }
+
+/* ─── MAP TOOLBAR ───────────────────────────── */
+.map-toolbar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.btn-add-mode {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--card); color: var(--primary);
+  border: 1.5px solid var(--primary); border-radius: 8px;
+  padding: 8px 14px; font-family: Inter, system-ui, sans-serif;
+  font-size: 0.88rem; font-weight: 600; cursor: pointer; min-height: 40px;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-add-mode.active {
+  background: var(--split); color: #fff; border-color: var(--split);
+}
+.btn-add-mode.active svg { stroke: #fff; }
+.add-mode-hint {
+  font-size: 0.78rem; color: var(--muted); line-height: 1.4;
+}
+.leaflet-container .ghost-tip {
+  background: rgba(30,30,30,0.85); color: #fff;
+  border: none; border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+  font-weight: 500; padding: 4px 9px; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+.leaflet-container .ghost-tip::before { display: none; }
+
+/* ─── MAP ────────────────────────────────────── */
+#routeMap {
+  height: 300px;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  position: relative;
+  z-index: 0;
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+}
+.map-hint {
+  font-size: 0.75rem; color: var(--muted); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 5px;
+}
+.map-hint-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--split); flex-shrink: 0; }
+.leaflet-control-attribution { font-size: 10px !important; }
+
+/* ─── LEGEND ─────────────────────────────────── */
+.legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; padding: 0 2px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.75rem; color: var(--muted); }
+.legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+/* ─── DOWNLOAD ALL ───────────────────────────── */
+.dl-all-row {
+  display: flex; gap: 8px; margin-bottom: 16px;
+}
+.btn-dl-all-tcx {
+  background: var(--topo); color: white; flex: 1.5;
+  border: none; border-radius: 9px; min-height: 48px;
+  font-family: 'DM Sans', sans-serif; font-weight: 600;
+  cursor: pointer; font-size: 0.95rem;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.btn-dl-all-tcx:hover { background: var(--topo-dk); }
+.btn-dl-all-gpx {
+  background: color-mix(in srgb, var(--primary) 12%, var(--card));
+  color: var(--primary); flex: 1;
+  border: 1.5px solid var(--border); border-radius: 9px; min-height: 48px;
+  font-family: 'DM Sans', sans-serif; font-weight: 600;
+  cursor: pointer; font-size: 0.95rem;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.btn-dl-all-gpx:hover { opacity: 0.8; }
+
+/* ─── SEGMENT CARDS ──────────────────────────── */
+.segments-container { display: flex; flex-direction: column; gap: 10px; }
+.segment-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--card);
+}
+.segment-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 12px 16px;
+  background: color-mix(in srgb, var(--primary) 6%, var(--card));
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.seg-meta { display: flex; flex-direction: column; gap: 1px; }
+.seg-num {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700; font-size: 0.72rem; text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--primary);
+}
+.seg-label { font-size: 0.9rem; font-weight: 600; }
+.seg-range {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--muted);
+  margin-top: 1px;
+}
+.seg-btns { display: flex; gap: 6px; flex-shrink: 0; }
+.btn-seg-tcx {
+  background: var(--topo); color: white; border: none; border-radius: 7px;
+  padding: 7px 12px; font-family: 'DM Sans', sans-serif; font-size: 0.82rem;
+  font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.btn-seg-tcx:hover { background: var(--topo-dk); }
+.btn-seg-gpx {
+  background: var(--bg); color: var(--muted); border: 1.5px solid var(--border);
+  border-radius: 7px; padding: 7px 10px;
+  font-family: 'DM Sans', sans-serif; font-size: 0.82rem;
+  font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.btn-seg-gpx:hover { color: var(--primary); border-color: var(--primary); }
+.seg-empty { padding: 12px 16px; font-size: 0.83rem; color: var(--muted); font-style: italic; }
+.single-dl-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.single-dl-row .btn-seg-tcx { flex: 1.5; min-height: 48px; font-size: 0.95rem; border-radius: 9px; }
+.single-dl-row .btn-seg-gpx { flex: 1; min-height: 48px; font-size: 0.95rem; border-radius: 9px; padding: 0 16px; }
+
+/* ─── TABLE ──────────────────────────────────── */
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.83rem; min-width: 420px; }
+thead th {
+  padding: 8px 14px; text-align: left;
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 600;
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted); border-bottom: 2px solid var(--border); white-space: nowrap;
+  background: var(--card);
+}
+thead th:nth-child(3), thead th:nth-child(4) { text-align: right; }
+tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr.skipped { opacity: 0.35; }
+tbody tr:not(.skipped):hover { background: color-mix(in srgb, var(--primary) 6%, var(--card)); }
+.td-dist, .td-ele { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.td-offset { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.td-name strong { font-weight: 600; }
+.td-name small { color: var(--muted); font-size: 0.75rem; display: block; }
+@media (max-width: 520px) { .col-ele, .col-offset { display: none; } }
+.type-sel {
+  font-family: 'DM Sans', sans-serif; font-size: 0.78rem;
+  padding: 5px 8px; border: 1.5px solid; border-radius: 6px;
+  background: var(--bg); color: var(--text); max-width: 105px; min-height: 34px; cursor: pointer;
+}
+input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+
+/* ─── IOS HINT ───────────────────────────────── */
+.ios-hint {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 12px; font-size: 0.83rem; color: var(--muted); line-height: 1.5;
+}
+.ios-hint strong { color: var(--text); }
+.format-note { font-size: 0.75rem; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+.format-note strong { color: var(--text); }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <div class="wordmark">
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M6 38 C10 32 17 30 22 24 C26 19 26 15 30 11 C32 9 35 8.5 38 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="22" cy="24" r="4" fill="var(--topo)"/>
+      <circle cx="22" cy="24" r="1.8" fill="var(--card)"/>
+      <circle cx="38" cy="8" r="4" fill="var(--topo)"/>
+      <circle cx="38" cy="8" r="1.8" fill="var(--card)"/>
+      <circle cx="6" cy="38" r="3" fill="currentColor" opacity="0.5"/>
+    </svg>
+    Trail GPX Converter
+  </div>
+  <p class="tagline">Snap waypoints to your route — split by resupply — export Garmin-ready courses</p>
+</header>
+
+<div id="installBanner" class="install-banner hidden">
+  <div class="install-banner-text">
+    <strong>Install offline app</strong>
+    <p>Add to home screen — works in airplane mode</p>
+  </div>
+  <button class="btn-install" id="installBtn">Install</button>
+</div>
+
+<div id="iosHint" class="ios-hint hidden">
+  <strong>Add to Home Screen:</strong> tap the Share button in Safari, then "Add to Home Screen." Works fully offline after that.
+</div>
+
+<!-- ── STEP 1: UPLOAD ── -->
+<section class="step" id="step1">
+  <div class="step-ghost" aria-hidden="true">01</div>
+  <div class="step-label">Load Route</div>
+
+  <div class="trail-preload">
+    <div class="trail-preload-label">Quick Start — Load a Sample Route</div>
+    <div class="trail-btns">
+      <!-- Add one button per bundled route. data-url points at a GPX file served from this site. -->
+      <button class="trail-btn" data-url="presets/demo.gpx" data-name="Demo route (sample data)">Demo<span class="trail-mi">~44 mi</span></button>
+    </div>
+    <p class="trail-disclaimer">The demo route is synthetic sample data. Drop in your own GPX below, or add your own presets (see the README).</p>
+  </div>
+
+  <div class="trail-or">or drop your own GPX</div>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".gpx,application/gpx+xml">
+    <svg class="drop-icon" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M22 30V14M15 21l7-7 7 7M10 34h24"/>
+      <path d="M8 26v6a2 2 0 002 2h24a2 2 0 002-2v-6"/>
+    </svg>
+    <h2>Drop your GPX file here</h2>
+    <p>Tap to browse — accepts files from your device</p>
+  </div>
+</section>
+
+<!-- ── STEP 2: CONFIGURE ── -->
+<section class="step hidden" id="step2">
+  <div class="step-ghost" aria-hidden="true">02</div>
+  <div class="step-label">Configure</div>
+
+  <div class="stats" id="statsGrid"></div>
+
+  <div class="reverse-row">
+    <button class="btn-reverse" id="reverseBtn">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M1 8h11M9 5l3 3-3 3"/><path d="M15 8H4M6 5L3 8l3 3"/>
+      </svg>
+      Reverse Start / End
+    </button>
+  </div>
+
+  <div class="settings-grid">
+    <div class="field full">
+      <label for="courseName">Course Name</label>
+      <input type="text" id="courseName" placeholder="My Course">
+    </div>
+    <div class="field">
+      <label for="units">Units</label>
+      <select id="units">
+        <option value="imperial">Imperial (miles / ft)</option>
+        <option value="metric">Metric (km / m)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="corridor">Trail corridor</label>
+      <select id="corridor">
+        <option value="50">50 m — Narrow single-track</option>
+        <option value="100" selected>100 m — Standard</option>
+        <option value="250">250 m — Wide</option>
+        <option value="500">500 m — Very wide</option>
+        <option value="999999">No limit</option>
+      </select>
+    </div>
+    <div class="field full">
+      <label for="distMarkers">Distance markers</label>
+      <select id="distMarkers">
+        <option value="0">None</option>
+        <option value="mile">Every mile</option>
+        <option value="5mile">Every 5 miles</option>
+        <option value="km">Every km</option>
+        <option value="10km">Every 10 km</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Resupply splits -->
+  <div class="splits-section">
+    <div class="step-label">Resupply / Track Splits</div>
+    <p class="splits-hint">Each split creates a separate Garmin course — useful for long thru-hikes that crash Garmin Connect as one file.</p>
+    <div class="split-add-row">
+      <div class="field">
+        <label for="splitDist">Distance from start</label>
+        <input type="number" id="splitDist" min="0" step="0.1" placeholder="e.g. 30">
+      </div>
+      <div class="field">
+        <label for="splitUnit">Unit</label>
+        <select id="splitUnit">
+          <option value="mile">miles</option>
+          <option value="km">km</option>
+        </select>
+      </div>
+      <button class="btn-add-split" id="addSplitBtn">Add</button>
+    </div>
+    <div class="split-list" id="splitList">
+      <p class="no-splits-msg">No splits yet — exports as one course</p>
+    </div>
+  </div>
+
+  <button class="btn btn-process" id="processBtn">Generate Course Points</button>
+</section>
+
+<!-- ── STEP 3: REVIEW & EXPORT ── -->
+<section class="step hidden" id="step3">
+  <div class="step-ghost" aria-hidden="true">03</div>
+  <div class="step-label">Review &amp; Export</div>
+
+  <div id="skipAlert" class="alert alert-warn hidden">
+    <span>⚠</span><span id="skipMsg"></span>
+  </div>
+
+  <div id="longRouteAlert" class="alert alert-long hidden">
+    <div>
+      <strong id="longRouteMsg"></strong>
+      <p id="longRouteDetail" style="margin-top:4px;font-size:0.8rem;opacity:0.85;line-height:1.4"></p>
+      <div class="split-suggest-row" id="splitSuggestRow"></div>
+    </div>
+  </div>
+
+  <div class="map-toolbar">
+    <button class="btn-add-mode" id="addModeBtn" onclick="toggleAddMode()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="7" y1="1" x2="7" y2="13"/><line x1="1" y1="7" x2="13" y2="7"/></svg>
+      Add Resupply
+    </button>
+    <span class="add-mode-hint hidden" id="addModeHint">
+      Move along route to preview mileage · click/tap to drop · ESC to finish
+    </span>
+  </div>
+  <div id="routeMap"></div>
+  <p class="map-hint" id="mapHintNormal">
+    Drag amber markers to reposition · tap <strong>Add Resupply</strong> to place splits
+  </p>
+  <div class="legend" id="mapLegend"></div>
+
+  <div class="dl-all-row hidden" id="dlAllRow">
+    <button class="btn-dl-all-tcx" id="dlAllTCX">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>
+      Download All TCX
+    </button>
+    <button class="btn-dl-all-gpx" id="dlAllGPX">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>
+      All GPX
+    </button>
+  </div>
+
+  <div class="segments-container" id="segmentsContainer"></div>
+
+  <p class="format-note" style="margin-top:12px">
+    <strong>TCX</strong> — imports to Garmin Connect as a course with named waypoints and distances.<br>
+    <strong>GPX</strong> — for Caltopo, AllTrails, or other apps.
+  </p>
+</section>
+
+</div><!-- /app -->
+
+<script>
+'use strict'
+
+// ─────────────────────────────────────────────
+// GEOMETRY
+// ─────────────────────────────────────────────
+function toRad(d) { return d * Math.PI / 180 }
+
+function haversine(la1, lo1, la2, lo2) {
+  const R = 6371000
+  const dLa = toRad(la2-la1), dLo = toRad(lo2-lo1)
+  const a = Math.sin(dLa/2)**2 + Math.cos(toRad(la1))*Math.cos(toRad(la2))*Math.sin(dLo/2)**2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+}
+
+function closestOnSeg(px, py, ax, ay, bx, by) {
+  const dx = bx-ax, dy = by-ay
+  const len2 = dx*dx + dy*dy
+  if (len2 === 0) return { x:ax, y:ay, t:0, d:Math.hypot(px-ax, py-ay) }
+  const t = Math.max(0, Math.min(1, ((px-ax)*dx + (py-ay)*dy) / len2))
+  const x = ax+t*dx, y = ay+t*dy
+  return { x, y, t, d:Math.hypot(px-x, py-y) }
+}
+
+// ─────────────────────────────────────────────
+// GPX PARSE
+// ─────────────────────────────────────────────
+function parseGPX(xml) {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml')
+  if (doc.querySelector('parsererror')) throw new Error('Could not parse XML — is this a valid GPX file?')
+  function els(p, tag) { return [...p.getElementsByTagNameNS('*', tag)] }
+  function el(p, tag)  { return p ? p.getElementsByTagNameNS('*', tag)[0] || null : null }
+  function txt(p, tag) { const e = el(p, tag); return e ? e.textContent.trim() : null }
+
+  const metaName = txt(el(doc,'metadata'),'name') || txt(el(doc,'trk'),'name') || txt(el(doc,'rte'),'name') || null
+  let trkEls = els(doc, 'trkpt')
+  if (!trkEls.length) trkEls = els(doc, 'rtept')
+  const track = trkEls.map(p => ({
+    lat: parseFloat(p.getAttribute('lat')),
+    lon: parseFloat(p.getAttribute('lon')),
+    ele: parseFloat(txt(p,'ele') || '0') || 0,
+    pd: txt(p,'dist') != null ? parseFloat(txt(p,'dist')) : null   // optional true distance along the trail (m), written into some presets
+  })).filter(p => !isNaN(p.lat) && !isNaN(p.lon))
+  if (track.length < 2) throw new Error('No track found — GPX must contain a <trk> or <rte> with at least 2 points.')
+  const waypoints = els(doc,'wpt').map(w => ({
+    lat: parseFloat(w.getAttribute('lat')),
+    lon: parseFloat(w.getAttribute('lon')),
+    ele: parseFloat(txt(w,'ele') || '0') || 0,
+    name: txt(w,'name') || 'Waypoint',
+    desc: txt(w,'desc') || txt(w,'cmt') || '',
+    sym:  txt(w,'sym')  || ''
+  })).filter(w => !isNaN(w.lat) && !isNaN(w.lon))
+  return { name: metaName, track, waypoints }
+}
+
+// ─────────────────────────────────────────────
+// TRACK METRICS
+// ─────────────────────────────────────────────
+function addDist(track) {
+  // Presets can carry each point's true distance along the trail (the saved track is thinned, so measuring it point to point comes up short)
+  if (track.every(p => p.pd != null && !isNaN(p.pd))) {
+    const d0 = track[0].pd
+    return track.map(p => ({ ...p, dist: p.pd - d0 }))
+  }
+  let d = 0
+  return track.map((p, i) => {
+    if (i > 0) d += haversine(track[i-1].lat, track[i-1].lon, p.lat, p.lon)
+    return { ...p, dist: d }
+  })
+}
+
+// ─────────────────────────────────────────────
+// SNAP WAYPOINT → TRACK
+// ─────────────────────────────────────────────
+function snap(wpt, track, corridorM) {
+  const cosLat = Math.cos(toRad(wpt.lat))
+  const mLat = 111320, mLon = 111320 * cosLat
+  const wx = wpt.lon * mLon, wy = wpt.lat * mLat
+  let best = null
+  for (let i = 0; i < track.length - 1; i++) {
+    const r = closestOnSeg(wx, wy,
+      track[i].lon*mLon, track[i].lat*mLat,
+      track[i+1].lon*mLon, track[i+1].lat*mLat)
+    if (!best || r.d < best.d) best = { ...r, i }
+  }
+  if (!best || best.d > corridorM) return null
+  const a = track[best.i], b = track[best.i+1], t = best.t
+  return {
+    lat: a.lat + t*(b.lat-a.lat), lon: a.lon + t*(b.lon-a.lon),
+    ele: a.ele + t*(b.ele-a.ele), dist: a.dist + t*(b.dist-a.dist),
+    offset: best.d,
+    name: wpt.name, desc: wpt.desc, sym: wpt.sym,
+    type: guessType(wpt.name, wpt.sym, wpt.desc)
+  }
+}
+
+// ─────────────────────────────────────────────
+// TYPE DETECTION
+// ─────────────────────────────────────────────
+const TYPES = ['Generic','Summit','Valley','Water','Food','Danger','FirstAid']
+const TYPE_COLORS = {
+  Water:'#2196f3', Food:'#ff9800', Summit:'#9c27b0',
+  Valley:'#4caf50', FirstAid:'#f44336', Danger:'#e53935', Generic:'#78909c'
+}
+function guessType(name, sym, desc) {
+  const s = (name+' '+sym+' '+desc).toLowerCase()
+  if (/water|spring|creek|stream|river|tank|cache|well|trough|fountain|drinkable|h2o/.test(s)) return 'Water'
+  if (/food|resupply|supply|store|restaurant|grocery|hostel|diner|cafe|snack|pizza/.test(s)) return 'Food'
+  if (/summit|peak|high.?point|apex/.test(s)) return 'Summit'
+  if (/valley|saddle|gap|col/.test(s)) return 'Valley'
+  if (/first.?aid|medical|hospital|emt|emergency|clinic/.test(s)) return 'FirstAid'
+  if (/danger|hazard|warning|caution|unsafe/.test(s)) return 'Danger'
+  return 'Generic'
+}
+
+// ─────────────────────────────────────────────
+// DISTANCE MARKERS
+// ─────────────────────────────────────────────
+function makeMarkers(track, mode) {
+  const cfg = { mile:[1609.34,'Mi'], '5mile':[8046.72,'Mi'], km:[1000,'km'], '10km':[10000,'km'] }
+  if (!cfg[mode]) return []
+  const [step, unit] = cfg[mode]
+  const total = track[track.length-1].dist
+  const out = []
+  for (let d = step; d < total; d += step) {
+    const n = Math.round(d/step)
+    const idx = track.findIndex(p => p.dist >= d)
+    if (idx < 1) continue
+    const a = track[idx-1], b = track[idx], t = (d-a.dist)/(b.dist-a.dist)
+    out.push({
+      lat: a.lat+t*(b.lat-a.lat), lon: a.lon+t*(b.lon-a.lon),
+      ele: a.ele+t*(b.ele-a.ele), dist: d,
+      offset: 0, name: `${unit} ${n}`, desc: '', sym: '', type: 'Generic', isMarker: true
+    })
+  }
+  return out
+}
+
+// ─────────────────────────────────────────────
+// TRACK SLICE (for segments)
+// ─────────────────────────────────────────────
+function getTrackSlice(track, startD, endD) {
+  const out = []
+  for (let i = 0; i < track.length; i++) {
+    const p = track[i]
+    if (i > 0) {
+      const prev = track[i-1]
+      if (prev.dist < startD && p.dist >= startD) {
+        const t = (startD-prev.dist)/(p.dist-prev.dist)
+        out.push({ lat: prev.lat+t*(p.lat-prev.lat), lon: prev.lon+t*(p.lon-prev.lon), ele: prev.ele+t*(p.ele-prev.ele), dist: startD })
+      }
+    }
+    if (p.dist >= startD && p.dist <= endD) out.push(p)
+    if (i > 0) {
+      const prev = track[i-1]
+      if (prev.dist <= endD && p.dist > endD) {
+        const t = (endD-prev.dist)/(p.dist-prev.dist)
+        out.push({ lat: prev.lat+t*(p.lat-prev.lat), lon: prev.lon+t*(p.lon-prev.lon), ele: prev.ele+t*(p.ele-prev.ele), dist: endD })
+        break
+      }
+    }
+  }
+  return out.length ? out : [track[0]]
+}
+
+// ─────────────────────────────────────────────
+// BUILD SEGMENTS
+// ─────────────────────────────────────────────
+function buildSegments() {
+  const track = ST.track
+  const total = track[track.length-1].dist
+  const validSplits = ST.splits.filter(d => d > 0 && d < total)
+  const bounds = [0, ...validSplits, total]
+
+  return bounds.slice(0,-1).map((startD, s) => {
+    const endD = bounds[s+1]
+    const segTrack = getTrackSlice(track, startD, endD)
+    const normedTrack = segTrack.map(p => ({ ...p, dist: p.dist - startD }))
+    const pointIndices = (ST.points || [])
+      .map((p, i) => ({ p, i }))
+      .filter(({ p }) => p.dist >= startD && p.dist <= endD)
+      .map(({ i }) => i)
+    const startLabel = s === 0 ? 'Start' : `Resupply ${s}`
+    const endLabel   = s === bounds.length-2 ? 'Finish' : `Resupply ${s+1}`
+    return {
+      index: s+1, label: `${startLabel} → ${endLabel}`,
+      startDist: startD, endDist: endD,
+      normedTrack, pointIndices
+    }
+  })
+}
+
+// ─────────────────────────────────────────────
+// TCX / GPX OUTPUT
+// ─────────────────────────────────────────────
+const BASE_MS = 946684800000
+function tcxTime(distM) {
+  return new Date(BASE_MS + Math.round(distM)*1000).toISOString().replace('.000Z','Z')
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+function generateTCX(name, track, points) {
+  const last = track[track.length-1]
+  const trackXml = track.map(p =>
+    `      <Trackpoint><Time>${tcxTime(p.dist)}</Time><Position><LatitudeDegrees>${p.lat.toFixed(8)}</LatitudeDegrees><LongitudeDegrees>${p.lon.toFixed(8)}</LongitudeDegrees></Position><AltitudeMeters>${p.ele.toFixed(1)}</AltitudeMeters><DistanceMeters>${p.dist.toFixed(2)}</DistanceMeters></Trackpoint>`
+  ).join('\n')
+  const cpXml = points.map(p => {
+    const notes = p.desc ? `\n      <Notes>${esc(p.desc.slice(0,255))}</Notes>` : ''
+    return `    <CoursePoint><Name>${esc(p.name.slice(0,15))}</Name><Time>${tcxTime(p.dist)}</Time><Position><LatitudeDegrees>${p.lat.toFixed(8)}</LatitudeDegrees><LongitudeDegrees>${p.lon.toFixed(8)}</LongitudeDegrees></Position><AltitudeMeters>${p.ele.toFixed(1)}</AltitudeMeters><DistanceMeters>${p.dist.toFixed(2)}</DistanceMeters><PointType>${p.type}</PointType>${notes}</CoursePoint>`
+  }).join('\n')
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd">
+  <Courses><Course>
+    <Name>${esc(name)}</Name>
+    <Lap>
+      <TotalTimeSeconds>${Math.round(last.dist)}</TotalTimeSeconds>
+      <DistanceMeters>${last.dist.toFixed(2)}</DistanceMeters>
+      <BeginPosition><LatitudeDegrees>${track[0].lat.toFixed(8)}</LatitudeDegrees><LongitudeDegrees>${track[0].lon.toFixed(8)}</LongitudeDegrees></BeginPosition>
+      <EndPosition><LatitudeDegrees>${last.lat.toFixed(8)}</LatitudeDegrees><LongitudeDegrees>${last.lon.toFixed(8)}</LongitudeDegrees></EndPosition>
+      <Intensity>Active</Intensity>
+    </Lap>
+    <Track>
+${trackXml}
+    </Track>
+${cpXml}
+  </Course></Courses>
+</TrainingCenterDatabase>`
+}
+function generateGPX(name, track, points) {
+  const wpts = points.map(p => {
+    const desc = p.desc ? `\n  <desc>${esc(p.desc)}</desc>` : ''
+    return `<wpt lat="${p.lat.toFixed(8)}" lon="${p.lon.toFixed(8)}"><ele>${p.ele.toFixed(1)}</ele><name>${esc(p.name)}</name>${desc}<sym>${p.type}</sym></wpt>`
+  }).join('\n')
+  const trkPts = track.map(p =>
+    `    <trkpt lat="${p.lat.toFixed(8)}" lon="${p.lon.toFixed(8)}"><ele>${p.ele.toFixed(1)}</ele></trkpt>`
+  ).join('\n')
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Trail GPX Converter" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><name>${esc(name)}</name></metadata>
+${wpts}
+  <trk><name>${esc(name)}</name><trkseg>
+${trkPts}
+  </trkseg></trk>
+</gpx>`
+}
+
+// ─────────────────────────────────────────────
+// LEAFLET MAP
+// ─────────────────────────────────────────────
+let _map = null
+let _routeLayer = null
+let _wayptLayers = []
+let _splitMarkers = []
+let _addMode = false
+let _ghostMarker = null
+let _touchSnapped = null
+
+function splitIcon(label) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:22px;height:22px;background:#c9920a;border:3px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.45);cursor:grab;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;font-family:Inter,sans-serif">${label}</div>`,
+    iconSize: [22, 22], iconAnchor: [11, 11]
+  })
+}
+
+function ghostIcon() {
+  return L.divIcon({
+    className: '',
+    html: '<div style="width:18px;height:18px;background:#c9920a;border:3.5px dashed rgba(255,255,255,0.9);border-radius:50%;opacity:0.85;box-sizing:border-box;pointer-events:none"></div>',
+    iconSize: [18, 18], iconAnchor: [9, 9]
+  })
+}
+
+window.toggleAddMode = function() {
+  _addMode = !_addMode
+  const btn = document.getElementById('addModeBtn')
+  const hint = document.getElementById('addModeHint')
+  const normal = document.getElementById('mapHintNormal')
+  btn.classList.toggle('active', _addMode)
+  btn.innerHTML = _addMode
+    ? '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="1" y1="1" x2="13" y2="13"/><line x1="13" y1="1" x2="1" y2="13"/></svg> Done adding'
+    : '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><line x1="7" y1="1" x2="7" y2="13"/><line x1="1" y1="7" x2="13" y2="7"/></svg> Add Resupply'
+  hint.classList.toggle('hidden', !_addMode)
+  if (normal) normal.classList.toggle('hidden', _addMode)
+  if (_map) {
+    document.getElementById('routeMap').style.cursor = _addMode ? 'crosshair' : ''
+    if (_addMode) {
+      _map.dragging.enable()
+      _map.scrollWheelZoom.enable()
+    }
+  }
+  if (!_addMode) clearGhost()
+}
+
+function clearGhost() {
+  if (_ghostMarker) { _ghostMarker.remove(); _ghostMarker = null }
+}
+
+function updateGhost(latlng) {
+  if (!_addMode || !ST.track || !_map) return null
+  const snapped = snap({ lat: latlng.lat, lon: latlng.lng, ele:0, name:'', desc:'', sym:'' }, ST.track, 999999)
+  if (!snapped) return null
+  const units = document.getElementById('units').value
+  const distLabel = fmtDist(snapped.dist, units) + ' from start'
+  if (!_ghostMarker) {
+    _ghostMarker = L.marker([snapped.lat, snapped.lon], { icon: ghostIcon(), interactive: false, zIndexOffset: 1000 })
+      .addTo(_map)
+      .bindTooltip(distLabel, { permanent: true, direction: 'top', offset: [0, -14], className: 'ghost-tip' })
+    _ghostMarker.openTooltip()
+  } else {
+    _ghostMarker.setLatLng([snapped.lat, snapped.lon])
+    _ghostMarker.setTooltipContent(distLabel)
+  }
+  return snapped
+}
+
+function initLeafletMap(track, points, splits) {
+  if (_addMode) { _addMode = false; clearGhost() }
+  if (_map) { _map.remove(); _map = null }
+  _wayptLayers = []; _splitMarkers = []
+
+  _map = L.map('routeMap', { zoomControl: true, scrollWheelZoom: true })
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
+    maxZoom: 18
+  }).addTo(_map)
+
+  const latlngs = track.map(p => [p.lat, p.lon])
+  _routeLayer = L.polyline(latlngs, { color: '#2d4a3e', weight: 3.5, opacity: 0.85 }).addTo(_map)
+
+  L.circleMarker([track[0].lat, track[0].lon], { radius: 7, fillColor: '#00c853', color: 'white', fillOpacity: 1, weight: 2 })
+    .bindTooltip('Start').addTo(_map)
+  L.circleMarker([track[track.length-1].lat, track[track.length-1].lon], { radius: 7, fillColor: '#d50000', color: 'white', fillOpacity: 1, weight: 2 })
+    .bindTooltip('Finish').addTo(_map)
+
+  points.filter(p => !p.skip).forEach(p => {
+    const m = L.circleMarker([p.lat, p.lon], {
+      radius: 7, fillColor: TYPE_COLORS[p.type] || TYPE_COLORS.Generic,
+      color: 'white', fillOpacity: 1, weight: 2
+    }).bindTooltip(p.name)
+    m.addTo(_map)
+    _wayptLayers.push(m)
+  })
+
+  _map.fitBounds(_routeLayer.getBounds(), { padding: [20, 20] })
+  renderLeafletSplits(splits)
+
+  // Desktop: ghost marker follows mouse in add mode
+  _map.on('mousemove', e => {
+    if (_addMode) updateGhost(e.latlng)
+  })
+  _map.on('mouseout', () => { if (_addMode) clearGhost() })
+
+  // Click: only add in add mode
+  _map.on('click', e => {
+    if (!_addMode) return
+    const snapped = updateGhost(e.latlng) ||
+      snap({ lat: e.latlng.lat, lon: e.latlng.lng, ele:0, name:'', desc:'', sym:'' }, ST.track, 999999)
+    if (snapped) addSplitAtDist(snapped.dist)
+  })
+
+  // Mobile: touchmove previews, touchend commits
+  const mapEl = document.getElementById('routeMap')
+  mapEl.addEventListener('touchmove', e => {
+    if (!_addMode || !_map) return
+    e.preventDefault()
+    const t = e.touches[0]
+    const rect = mapEl.getBoundingClientRect()
+    const latlng = _map.containerPointToLatLng(L.point(t.clientX - rect.left, t.clientY - rect.top))
+    _touchSnapped = updateGhost(latlng)
+  }, { passive: false })
+
+  mapEl.addEventListener('touchend', () => {
+    if (!_addMode) return
+    if (_touchSnapped) { addSplitAtDist(_touchSnapped.dist); _touchSnapped = null }
+  })
+
+  // ESC exits add mode
+  document.addEventListener('keydown', function onKey(e) {
+    if (e.key === 'Escape' && _addMode) toggleAddMode()
+    if (!_map) document.removeEventListener('keydown', onKey)
+  })
+}
+
+function renderLeafletSplits(splits) {
+  _splitMarkers.forEach(m => m.remove())
+  _splitMarkers = []
+  ;(splits||[]).forEach((distM, i) => {
+    const idx = ST.track.findIndex(p => p.dist >= distM)
+    if (idx < 1) return
+    const a = ST.track[idx-1], b = ST.track[idx]
+    const t2 = (distM-a.dist)/(b.dist-a.dist)
+    const lat = a.lat + t2*(b.lat-a.lat), lon = a.lon + t2*(b.lon-a.lon)
+    const units = document.getElementById('units').value
+    const distLabel = fmtDist(distM, units)
+
+    const m = L.marker([lat, lon], { icon: splitIcon(i+1), draggable: true, title: `Resupply ${i+1}` })
+    m.addTo(_map)
+
+    // Popup with remove button (shown on click, not on drag)
+    const popupHtml = `<div style="text-align:center;padding:4px 2px;min-width:130px">
+      <strong style="font-size:0.9rem">Resupply ${i+1}</strong><br>
+      <span style="font-size:0.8rem;color:#666">${distLabel} from start</span><br>
+      <button onclick="removeSplit(${i})" style="margin-top:8px;background:#c8603e;color:white;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:0.82rem;font-weight:600;font-family:Inter,sans-serif;width:100%">Remove</button>
+    </div>`
+    m.bindPopup(popupHtml, { closeButton: false, minWidth: 140 })
+
+    let _dragged = false
+    m.on('dragstart', () => { _dragged = true; m.closePopup() })
+    m.on('drag', () => {
+      const pos = m.getLatLng()
+      const snapped = snap({ lat: pos.lat, lon: pos.lng, ele:0, name:'', desc:'', sym:'' }, ST.track, 999999)
+      if (snapped) m.setLatLng([snapped.lat, snapped.lon])
+    })
+    m.on('dragend', () => {
+      const pos = m.getLatLng()
+      const snapped = snap({ lat: pos.lat, lon: pos.lng, ele:0, name:'', desc:'', sym:'' }, ST.track, 999999)
+      if (snapped) {
+        ST.splits[i] = snapped.dist
+        ST.splits.sort((a,b) => a-b)
+        renderSplitList()
+        renderResults(true)
+      }
+      setTimeout(() => { _dragged = false }, 100)
+    })
+    m.on('click', () => { if (!_dragged) m.openPopup() })
+
+    _splitMarkers.push(m)
+  })
+}
+
+// ─────────────────────────────────────────────
+// FORMAT HELPERS
+// ─────────────────────────────────────────────
+function fmtDist(m, units) {
+  if (units === 'metric') return m >= 1000 ? `${(m/1000).toFixed(2)} km` : `${Math.round(m)} m`
+  return `${(m/1609.34).toFixed(2)} mi`
+}
+function fmtEle(m, units) {
+  return units === 'metric' ? `${Math.round(m)} m` : `${Math.round(m*3.28084)} ft`
+}
+function escHtml(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML }
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let ST = { parsed:null, track:null, points:null, splits:[], segments:[], file:'course' }
+
+// ─────────────────────────────────────────────
+// DOM REFS
+// ─────────────────────────────────────────────
+const $drop   = document.getElementById('dropZone')
+const $file   = document.getElementById('fileInput')
+const $step2  = document.getElementById('step2')
+const $step3  = document.getElementById('step3')
+const $stats  = document.getElementById('statsGrid')
+const $legend = document.getElementById('mapLegend')
+const $segs   = document.getElementById('segmentsContainer')
+
+// ─────────────────────────────────────────────
+// FILE LOADING
+// ─────────────────────────────────────────────
+$drop.addEventListener('dragover', e => { e.preventDefault(); $drop.classList.add('over') })
+$drop.addEventListener('dragleave', () => $drop.classList.remove('over'))
+$drop.addEventListener('drop', e => { e.preventDefault(); $drop.classList.remove('over'); const f=e.dataTransfer.files[0]; if(f) loadFile(f) })
+$file.addEventListener('change', e => { if(e.target.files[0]) loadFile(e.target.files[0]) })
+
+function loadFile(f) {
+  ST.file = f.name.replace(/\.gpx$/i,'')
+  ST.splits = []
+  const r = new FileReader()
+  r.onload = e => {
+    try {
+      ST.parsed = parseGPX(e.target.result)
+      ST.track  = addDist(ST.parsed.track)
+      ST.points = null
+      document.getElementById('courseName').value = ST.parsed.name || ST.file
+      renderStats()
+      renderSplitList()
+      showDropComplete(f.name)
+      $step2.classList.remove('hidden')
+      $step3.classList.add('hidden')
+    } catch(err) { alert('Error reading GPX: ' + err.message) }
+  }
+  r.readAsText(f)
+}
+
+async function loadFromURL(url, name) {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status} — trail data not found`)
+    const xml = await res.text()
+    ST.file   = name
+    ST.splits = []
+    ST.parsed = parseGPX(xml)
+    ST.track  = addDist(ST.parsed.track)
+    ST.points = null
+    document.getElementById('courseName').value = ST.parsed.name || name
+    renderStats()
+    renderSplitList()
+    showDropComplete(name)
+    $step2.classList.remove('hidden')
+    $step3.classList.add('hidden')
+  } catch(err) {
+    alert('Could not load trail: ' + err.message)
+  }
+}
+
+document.querySelectorAll('.trail-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const url = btn.dataset.url, name = btn.dataset.name
+    btn.classList.add('loading')
+    loadFromURL(url, name).finally(() => btn.classList.remove('loading'))
+  })
+})
+
+function showDropComplete(name) {
+  $drop.classList.add('has-file')
+  $drop.innerHTML = `<input type="file" id="fileInput" accept=".gpx,application/gpx+xml">
+    <div class="file-info"><div class="file-name">${escHtml(name)}</div><div class="file-sub">Tap to load a different file</div></div>
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="var(--accent)" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M16.7 5.3a1 1 0 00-1.4 0L8 12.6 4.7 9.3a1 1 0 00-1.4 1.4l4 4a1 1 0 001.4 0l8-8a1 1 0 000-1.4z"/></svg>`
+  document.getElementById('fileInput').addEventListener('change', e => { if(e.target.files[0]) loadFile(e.target.files[0]) })
+}
+
+// ─────────────────────────────────────────────
+// STATS
+// ─────────────────────────────────────────────
+function renderStats() {
+  const t = ST.track, units = document.getElementById('units').value
+  const total = t[t.length-1].dist
+  let gain = 0
+  for (let i=1;i<t.length;i++) { const d=t[i].ele-t[i-1].ele; if(d>0) gain+=d }
+  $stats.innerHTML = [
+    [fmtDist(total, units),'Distance'],
+    [t.length.toLocaleString(),'Track pts'],
+    [ST.parsed.waypoints.length,'Waypoints'],
+    ['+'+fmtEle(gain,units),'Elev gain']
+  ].map(([v,l]) => `<div class="stat"><div class="stat-val">${v}</div><div class="stat-lbl">${l}</div></div>`).join('')
+}
+
+// ─────────────────────────────────────────────
+// REVERSE TRACK
+// ─────────────────────────────────────────────
+document.getElementById('reverseBtn').addEventListener('click', () => {
+  const total = ST.track[ST.track.length-1].dist
+  ST.splits = ST.splits.map(d => total-d).sort((a,b) => a-b)
+  const tl = ST.parsed.track, pdEnd = tl[tl.length-1].pd
+  ST.parsed.track = [...tl].reverse().map(p => ({ ...p, pd: p.pd == null ? null : pdEnd - p.pd }))
+  ST.track = addDist(ST.parsed.track)
+  renderStats()
+  renderSplitList()
+  if (ST.points !== null) processCore()
+})
+
+// ─────────────────────────────────────────────
+// SPLITS
+// ─────────────────────────────────────────────
+document.getElementById('addSplitBtn').addEventListener('click', () => {
+  const val = parseFloat(document.getElementById('splitDist').value)
+  const unit = document.getElementById('splitUnit').value
+  if (isNaN(val) || val <= 0) return
+  const distM = unit === 'mile' ? val * 1609.34 : val * 1000
+  addSplitAtDist(distM)
+  document.getElementById('splitDist').value = ''
+})
+
+function addSplitAtDist(distM) {
+  if (!ST.track) return
+  const total = ST.track[ST.track.length-1].dist
+  if (distM <= 0 || distM >= total) return
+  if (ST.splits.some(s => Math.abs(s-distM) < 200)) return // skip near-dupes
+  ST.splits.push(distM)
+  ST.splits.sort((a,b) => a-b)
+  renderSplitList()
+  if (ST.points !== null) renderResults(true)
+}
+
+window.removeSplit = function(i) {
+  ST.splits.splice(i,1)
+  renderSplitList()
+  if (ST.points !== null) renderResults(true)
+}
+
+function renderSplitList() {
+  const units = document.getElementById('units').value
+  const el = document.getElementById('splitList')
+  if (!ST.splits.length) {
+    el.innerHTML = '<p class="no-splits-msg">No splits yet — exports as one course</p>'
+    return
+  }
+  el.innerHTML = ST.splits.map((d, i) => `
+    <div class="split-item">
+      <div class="split-dot"></div>
+      <div class="split-info">
+        <strong>Resupply ${i+1}</strong>
+        <span>${fmtDist(d, units)} from start</span>
+      </div>
+      <button class="btn-remove-split" onclick="removeSplit(${i})" aria-label="Remove split ${i+1}">×</button>
+    </div>`).join('')
+}
+
+// ─────────────────────────────────────────────
+// PROCESSING
+// ─────────────────────────────────────────────
+document.getElementById('processBtn').addEventListener('click', processCore)
+
+function processCore() {
+  const corridorM = parseFloat(document.getElementById('corridor').value)
+  const markerMode = document.getElementById('distMarkers').value
+  const snapped = ST.parsed.waypoints.map(w => snap(w, ST.track, corridorM)).filter(Boolean)
+  const markers = makeMarkers(ST.track, markerMode)
+  ST.points = [...snapped, ...markers].sort((a,b) => a.dist-b.dist)
+
+  const skipped = ST.parsed.waypoints.length - snapped.length
+  const $alert = document.getElementById('skipAlert')
+  if (skipped > 0) {
+    document.getElementById('skipMsg').textContent =
+      `${skipped} waypoint${skipped>1?'s were':' was'} more than ${document.getElementById('corridor').value}m from the track and won't be included. Widen the corridor if needed.`
+    $alert.classList.remove('hidden')
+  } else {
+    $alert.classList.add('hidden')
+  }
+
+  $step3.classList.remove('hidden')
+  renderResults()
+  setTimeout(() => { if (_map) _map.invalidateSize() }, 120)
+  setTimeout(() => $step3.scrollIntoView({ behavior:'smooth', block:'start' }), 50)
+}
+
+// ─────────────────────────────────────────────
+// RENDER RESULTS
+// ─────────────────────────────────────────────
+function renderResults(splitsOnly) {
+  ST.segments = buildSegments()
+  const units = document.getElementById('units').value
+
+  if (!splitsOnly || !_map) {
+    initLeafletMap(ST.track, ST.points||[], ST.splits)
+  } else {
+    renderLeafletSplits(ST.splits)
+  }
+
+  renderLegend()
+  renderLongRouteAlert(units)
+
+  const multi = ST.segments.length > 1
+  document.getElementById('dlAllRow').classList.toggle('hidden', !multi)
+
+  renderSegmentCards(units)
+}
+
+function renderLongRouteAlert(units) {
+  const total = ST.track[ST.track.length-1].dist
+  const totalMi = total / 1609.34
+  const el = document.getElementById('longRouteAlert')
+  const msgEl = document.getElementById('longRouteMsg')
+  const detailEl = document.getElementById('longRouteDetail')
+  const rowEl = document.getElementById('splitSuggestRow')
+
+  if (totalMi < 80 || ST.splits.length > 0) { el.classList.add('hidden'); return }
+
+  el.classList.remove('hidden')
+  msgEl.textContent = `${totalMi.toFixed(0)}-mile route — consider splitting for Garmin`
+  detailEl.textContent =
+    'Garmin watches cap course waypoints at 50 (older) or 200 (Fenix 5+/Epix). Garmin Connect can also crash importing large files. Splitting into legs keeps each import reliable.'
+
+  const suggestSteps = [50, 75, 100].filter(mi => mi * 1609.34 < total)
+  rowEl.innerHTML = suggestSteps.map(mi =>
+    `<button class="btn-suggest-split" onclick="applySuggestedSplits(${mi})">Split every ${mi} mi</button>`
+  ).join('') + (units === 'metric' ? [80, 100, 150].filter(km => km * 1000 < total).map(km =>
+    `<button class="btn-suggest-split" onclick="applySuggestedSplitsKm(${km})">Split every ${km} km</button>`
+  ).join('') : '')
+}
+
+window.applySuggestedSplits = function(mi) {
+  const stepM = mi * 1609.34
+  const total = ST.track[ST.track.length-1].dist
+  ST.splits = []
+  for (let d = stepM; d < total; d += stepM) ST.splits.push(d)
+  renderSplitList()
+  renderResults(true)
+}
+
+window.applySuggestedSplitsKm = function(km) {
+  const stepM = km * 1000
+  const total = ST.track[ST.track.length-1].dist
+  ST.splits = []
+  for (let d = stepM; d < total; d += stepM) ST.splits.push(d)
+  renderSplitList()
+  renderResults(true)
+}
+
+function renderLegend() {
+  const seen = {}
+  ;(ST.points||[]).filter(p=>!p.skip).forEach(p => { seen[p.type]=true })
+  $legend.innerHTML =
+    Object.keys(seen).map(t =>
+      `<div class="legend-item"><div class="legend-dot" style="background:${TYPE_COLORS[t]}"></div>${t}</div>`
+    ).join('') +
+    `<div class="legend-item"><div class="legend-dot" style="background:#00c853"></div>Start</div>` +
+    `<div class="legend-item"><div class="legend-dot" style="background:#d50000"></div>Finish</div>` +
+    (ST.splits.length ? `<div class="legend-item"><div class="legend-dot" style="background:#d4a017"></div>Resupply split</div>` : '')
+}
+
+function renderSegmentCards(units) {
+  units = units || document.getElementById('units').value
+  const multi = ST.segments.length > 1
+
+  $segs.innerHTML = ST.segments.map((seg, si) => {
+    const segDist = seg.endDist - seg.startDist
+    const rows = seg.pointIndices.map(idx => {
+      const p = ST.points[idx]
+      const displayDist = p.dist - seg.startDist
+      const opts = TYPES.map(t => `<option value="${t}"${t===p.type?' selected':''}>${t}</option>`).join('')
+      const col = TYPE_COLORS[p.type] || TYPE_COLORS.Generic
+      const offsetTxt = p.isMarker ? '—' : p.offset < 5 ? '<5 m' : `${Math.round(p.offset)} m`
+      return `<tr id="r${idx}" class="${p.skip?'skipped':''}">
+        <td><input type="checkbox" ${p.skip?'':'checked'} onchange="toggleSkip(${idx},this.checked)" aria-label="Include ${escHtml(p.name)}"></td>
+        <td class="td-name"><strong>${escHtml(p.name)}</strong>${p.isMarker?'<small>marker</small>':''}</td>
+        <td class="td-dist">${fmtDist(displayDist, units)}</td>
+        <td class="td-ele col-ele">${fmtEle(p.ele, units)}</td>
+        <td class="td-offset col-offset">${offsetTxt}</td>
+        <td><select class="type-sel" style="border-color:${col}" onchange="changeType(${idx},this.value)" aria-label="Type">${opts}</select></td>
+      </tr>`
+    }).join('')
+
+    const tableHtml = seg.pointIndices.length === 0
+      ? '<p class="seg-empty">No waypoints in this segment</p>'
+      : `<div class="table-scroll"><table>
+          <thead><tr><th>On</th><th>Name</th><th>${multi ? 'Leg' : ''} dist</th><th class="col-ele">Elev</th><th class="col-offset">Off-trail</th><th>Type</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>`
+
+    if (!multi) {
+      // Single course — no segment card wrapper, just the table + dl buttons
+      return `<div class="single-dl-row">
+        <button class="btn-seg-tcx" onclick="downloadSeg(0,'tcx')">⬇ Download TCX</button>
+        <button class="btn-seg-gpx" onclick="downloadSeg(0,'gpx')">Download GPX</button>
+      </div>
+      ${tableHtml}`
+    }
+
+    return `<div class="segment-card">
+      <div class="segment-header">
+        <div class="seg-meta">
+          <span class="seg-num">Leg ${seg.index} of ${ST.segments.length}</span>
+          <span class="seg-label">${escHtml(seg.label)}</span>
+          <span class="seg-range">${fmtDist(segDist, units)} · ${fmtDist(seg.startDist, units)} – ${fmtDist(seg.endDist, units)}</span>
+        </div>
+        <div class="seg-btns">
+          <button class="btn-seg-tcx" onclick="downloadSeg(${si},'tcx')">⬇ TCX</button>
+          <button class="btn-seg-gpx" onclick="downloadSeg(${si},'gpx')">GPX</button>
+        </div>
+      </div>
+      ${tableHtml}
+    </div>`
+  }).join('')
+}
+
+window.toggleSkip = function(idx, checked) {
+  ST.points[idx].skip = !checked
+  document.getElementById('r'+idx).className = checked ? '' : 'skipped'
+  refreshMapWaypoints()
+  renderLegend()
+}
+
+window.changeType = function(idx, val) {
+  ST.points[idx].type = val
+  const sel = document.querySelector(`#r${idx} .type-sel`)
+  if (sel) sel.style.borderColor = TYPE_COLORS[val] || TYPE_COLORS.Generic
+  refreshMapWaypoints()
+  renderLegend()
+}
+
+function refreshMapWaypoints() {
+  if (!_map) return
+  _wayptLayers.forEach(m => m.remove())
+  _wayptLayers = []
+  ;(ST.points||[]).filter(p => !p.skip).forEach(p => {
+    const m = L.circleMarker([p.lat, p.lon], {
+      radius: 7, fillColor: TYPE_COLORS[p.type] || TYPE_COLORS.Generic,
+      color: 'white', fillOpacity: 1, weight: 2
+    }).bindTooltip(p.name)
+    m.addTo(_map)
+    _wayptLayers.push(m)
+  })
+}
+
+// ─────────────────────────────────────────────
+// DOWNLOAD
+// ─────────────────────────────────────────────
+function segPoints(seg) {
+  return seg.pointIndices
+    .map(i => ST.points[i])
+    .filter(p => !p.skip)
+    .map(p => ({ ...p, dist: p.dist - seg.startDist }))
+}
+
+window.downloadSeg = function(si, fmt) {
+  const seg = ST.segments[si]
+  const baseName = document.getElementById('courseName').value.trim() || ST.file
+  const name = ST.segments.length > 1 ? `${baseName} — Leg ${seg.index}` : baseName
+  const pts = segPoints(seg)
+  const ext = fmt === 'tcx' ? 'tcx' : 'gpx'
+  const mime = fmt === 'tcx' ? 'application/vnd.garmin.tcx+xml' : 'application/gpx+xml'
+  const content = fmt === 'tcx' ? generateTCX(name, seg.normedTrack, pts) : generateGPX(name, seg.normedTrack, pts)
+  const suffix = ST.segments.length > 1 ? `-leg${seg.index}` : '-course'
+  triggerDownload(content, mime, `${ST.file}${suffix}.${ext}`)
+}
+
+document.getElementById('dlAllTCX').addEventListener('click', () => {
+  ST.segments.forEach((_, si) => setTimeout(() => downloadSeg(si,'tcx'), si*400))
+})
+document.getElementById('dlAllGPX').addEventListener('click', () => {
+  ST.segments.forEach((_, si) => setTimeout(() => downloadSeg(si,'gpx'), si*400))
+})
+
+function triggerDownload(content, mime, filename) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([content], {type:mime}))
+  a.download = filename
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+}
+
+// ─────────────────────────────────────────────
+// PWA
+// ─────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {})
+}
+let deferredPrompt = null
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e
+  document.getElementById('installBanner').classList.remove('hidden')
+})
+document.getElementById('installBtn').addEventListener('click', () => {
+  if (!deferredPrompt) return
+  deferredPrompt.prompt()
+  deferredPrompt.userChoice.then(() => {
+    document.getElementById('installBanner').classList.add('hidden')
+    deferredPrompt = null
+  })
+})
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+const isStandalone = ('standalone' in navigator && navigator.standalone) || window.matchMedia('(display-mode: standalone)').matches
+if (isIOS && !isStandalone) document.getElementById('iosHint').classList.remove('hidden')
+</script>
+</body>
+</html>
