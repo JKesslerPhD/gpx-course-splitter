@@ -2,7 +2,7 @@
 
 A single-page, no-build web tool that turns a GPX route plus waypoints into Garmin-ready course files.
 
-Dropping waypoints on a map in Gaia GPS or CalTopo is easy. Getting those same waypoints onto a Garmin course is not: Garmin Connect's course editor is clunky, very long routes can choke it, and watches cap the number of course points. This tool does the tedious parts in your browser.
+Dropping waypoints on a map in Gaia GPS or CalTopo is easy. Getting those same waypoints onto a Garmin course is not: Garmin Connect's course editor is clunky, Garmin Connect and the Garmin watches often crash with long courses or a lot of waypoints, and watches cap the number of course points. This tool does the tedious parts in your browser.
 
 ## What it does
 
