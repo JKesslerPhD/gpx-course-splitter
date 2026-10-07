@@ -1,4 +1,4 @@
-const APP_CACHE = 'gpx-course-splitter-v1'
+const APP_CACHE = 'gpx-course-splitter-v2'
 const FONT_CACHE = 'gpx-course-splitter-fonts-v1'
 const LEAFLET_CACHE = 'gpx-course-splitter-leaflet-v1'
 const APP_ASSETS = ['./', './index.html', './manifest.json', './icon.svg']
